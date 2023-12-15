@@ -1,0 +1,74 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.0;
+
+import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
+import "hardhat/console.sol";
+
+contract DegenToken is ERC20, Ownable, ERC20Burnable {
+    event LogMessage(string message);
+
+    struct Supplement {
+        uint256 price;
+        uint256 num;
+    }
+
+    mapping(string => Supplement) public supplements;
+    mapping(address => uint256) public userBalances;
+
+    constructor() ERC20("DEGEN", "DGN") Ownable(msg.sender) {}
+
+    function mint(address target, uint256 volume) public onlyOwner {
+        _mint(target, volume);
+    }
+
+    function burn_(uint256 volume) public payable {
+        require(balanceOf(msg.sender) >= volume, "INSUFFICIENT FUNDS!!");
+        _burn(msg.sender, volume);
+        emit LogMessage("Burned volume");
+    }
+
+    function transfer_(address recipient, uint256 volume) external {
+        require(balanceOf(msg.sender) >= volume, "INSUFFICIENT FUNDS!!");
+        _transfer(msg.sender, recipient, volume);
+    }
+
+    function setSupplementPricesAndQuantities(
+        string memory supplementName,
+        uint256 price,
+        uint256 num
+    ) external onlyOwner {
+        require(bytes(supplementName).length > 0, "Supplement name cannot be empty");
+        require(price > 0, "Price must be greater than zero");
+        require(num >= 0, "Num must be greater than or equal to zero");
+
+        supplements[supplementName] = Supplement(price, num);
+
+        emit LogMessage("Set supplement prices and quantities");
+    }
+
+    function redeemSupplement(
+        string memory supplementName,
+        uint256 num
+    ) external payable {
+        require(bytes(supplementName).length > 0, "Supplement name cannot be empty");
+        require(num > 0, "Num must be greater than zero");
+        require(balanceOf(msg.sender) >= supplements[supplementName].price * num, "INSUFFICIENT FUNDS!!");
+        
+        Supplement storage supplement = supplements[supplementName];
+        require(supplement.num >= num, "Insufficient supplement num");
+
+        _burn(msg.sender, supplement.price * num);
+        userBalances[msg.sender] += num;
+        supplement.num -= num;
+
+        emit LogMessage("Redeemed supplement");
+    }
+
+    function removeSupplement(string memory supplementName) external onlyOwner {
+        require(supplements[supplementName].price != 0, "Supplement does not exist");
+        delete supplements[supplementName];
+        emit LogMessage("Removed supplement");
+    }
+}
